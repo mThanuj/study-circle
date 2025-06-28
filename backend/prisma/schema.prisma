@@ -1,0 +1,181 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CircleRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum ReactionType {
+  LIKE
+  DISLIKE
+}
+
+enum NotificationType {
+  NEW_POST
+  NEW_COMMENT
+  MENTION
+  NEW_CHAT_MESSAGE
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  avatar    String?
+  bio       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ownedCircles    Circle[]       @relation("CircleOwner")
+  memberships     CircleMember[]
+  posts           Post[]
+  comments        Comment[]
+  reactions       Reaction[]
+  chatMessages    ChatMessage[]
+  sentFollows     Follow[]       @relation("Follower")
+  receivedFollows Follow[]       @relation("Following")
+  notifications   Notification[]
+}
+
+model Circle {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  ownerId     Int
+  owner       User     @relation("CircleOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  members      CircleMember[]
+  posts        Post[]
+  chatMessages ChatMessage[]
+}
+
+model CircleMember {
+  userId    Int
+  circleId  Int
+  role      CircleRole @default(MEMBER)
+  createdAt DateTime   @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  circle Circle @relation(fields: [circleId], references: [id])
+
+  @@id([userId, circleId])
+  @@index([circleId, role])
+}
+
+model Post {
+  id        Int      @id @default(autoincrement())
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  authorId  Int
+  circleId  Int?
+
+  author    User       @relation(fields: [authorId], references: [id])
+  circle    Circle?    @relation(fields: [circleId], references: [id])
+  tags      PostTag[]
+  comments  Comment[]
+  reactions Reaction[]
+
+  @@index([circleId])
+  @@index([authorId])
+}
+
+model Tag {
+  id    Int       @id @default(autoincrement())
+  name  String    @unique
+  posts PostTag[]
+}
+
+model PostTag {
+  postId Int
+  tagId  Int
+
+  post Post @relation(fields: [postId], references: [id])
+  tag  Tag  @relation(fields: [tagId], references: [id])
+
+  @@id([postId, tagId])
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  postId    Int
+  authorId  Int
+  parentId  Int?
+
+  post    Post      @relation(fields: [postId], references: [id])
+  author  User      @relation(fields: [authorId], references: [id])
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies Comment[] @relation("CommentReplies")
+
+  @@index([postId])
+  @@index([parentId])
+}
+
+model Reaction {
+  id        Int          @id @default(autoincrement())
+  type      ReactionType @default(LIKE)
+  userId    Int
+  postId    Int
+  createdAt DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  post Post @relation(fields: [postId], references: [id])
+
+  @@unique([userId, postId])
+}
+
+model ChatMessage {
+  id        Int      @id @default(autoincrement())
+  content   String
+  userId    Int
+  circleId  Int
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  circle Circle @relation(fields: [circleId], references: [id])
+
+  @@index([circleId, createdAt])
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  type      NotificationType
+  read      Boolean          @default(false)
+  userId    Int
+  createdAt DateTime         @default(now())
+
+  sourceUserId  Int?
+  postId        Int?
+  commentId     Int?
+  circleId      Int?
+  chatMessageId Int?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, read])
+}
+
+model Follow {
+  followerId  Int
+  followingId Int
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Follower", fields: [followerId], references: [id])
+  following User @relation("Following", fields: [followingId], references: [id])
+
+  @@id([followerId, followingId])
+}
